@@ -1,5 +1,6 @@
 import re
 import pandas as pd
+from tkinter import Tk, Label, Entry, Button, Frame, Scrollbar, Text
 from math import radians, sin, cos, sqrt, atan2
 
 #  thông tin tên Trạm CA, số Điểm phát sóng gần nhất muốn tìm 
@@ -36,37 +37,107 @@ def haversine(lat1, lon1, lat2, lon2):
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return R * c
 
-def get_closest(lat, lon, locations):
+def get_closest(lat, lon, locations, number_of_location):
     # Compute distances
     distances = {location: haversine(lat, lon, location[0], location[1]) for location in locations}
 
-    # Find 5 closest points
-    closest_points = sorted(distances.items(), key=lambda item: item[1])[:5]
+    # Find closest points
+    closest_points = sorted(distances.items(), key=lambda item: item[1])[:int(number_of_location)]
     return closest_points
 
-
-# input
-dau_vao = "Phúc Xá - 50"
-
-administrative_unit_name = dau_vao.rsplit(" - ", 1)[0]
-number_of_boardcast_point = dau_vao.rsplit(" - ", 1)[1]
-
-tram_ca = pd.read_excel("C:\Workspace\get_broadcast\E124-2009 (31-12)2-MSDVHCVN.xls", sheet_name="Xa", usecols="D,G")
-broadcast_location = pd.read_excel("C:\Workspace\get_broadcast\hanoi.xlsx", usecols="B, C")
-
-list_broadcast_locations = []
-for index, rows in broadcast_location.iterrows():
-    # Create list for the current row
-    my_list =(rows.Lat.item(), rows.Lon.item())
+def main(administrative_unit, number_of_boardcast):
+    tram_ca = pd.read_excel("C:\Workspace\get_broadcast\E124-2009 (31-12)2-MSDVHCVN.xls", sheet_name="Xa", usecols="D,G")
+    # Validate input
+    tram_ca_mapped = tram_ca[tram_ca["Tên đơn vị hành chính"].str.contains(administrative_unit,regex=True)]
     
-    # append the list to the final list
-    list_broadcast_locations.append(my_list)
+    if len(tram_ca_mapped) > 0:
+        lat_dd, lon_dd = lat_lon_convert(tram_ca_mapped["Toạ độ điểm trung tâm (Vĩ độ, Kinh độ)"].iloc[0])
 
-# Validate input
-tram_ca = tram_ca[tram_ca["Tên đơn vị hành chính"].str.contains(administrative_unit_name,regex=True)]
+        broadcast_location = pd.read_excel("C:\Workspace\get_broadcast\hanoi.xls", usecols="B, C")
+        list_broadcast_locations = []
+        for index, rows in broadcast_location.iterrows():
+            # Create list for the current row
+            my_list =(rows.Lat.item(), rows.Lon.item())
+            
+            # append the list to the final list
+            list_broadcast_locations.append(my_list)
 
-lat_dd, lon_dd = lat_lon_convert(tram_ca["Toạ độ điểm trung tâm (Vĩ độ, Kinh độ)"].iloc[0])
+        closest_points = get_closest(lat_dd, lon_dd, list_broadcast_locations, number_of_boardcast)
 
-close = get_closest(lat_dd, lon_dd, list_broadcast_locations)
+        # Format output text
+        result = f"Tọa độ {number_of_boardcast} điểm gần trạm CA nhất là:\n"
+        result += "\n".join(f"{point} - khoảng cách {distance:.2f} km\n" for point, distance in closest_points)
 
-close
+        # Clear previous output and insert new text
+        result_textbox.config(state="normal")  # Enable editing
+        result_textbox.delete(1.0, "end")  # Clear previous text
+        result_textbox.insert("end", result)  # Insert new result
+        result_textbox.config(state="disabled")  # Disable editing
+        return True
+
+    else:
+        result = f"Không tìm thấy kết quả theo tên trạm CA: {administrative_unit}\n Vui lòng kiểm tra lại tên trạm đã nhập."
+        result_textbox.config(state="normal")  # Enable editing
+        result_textbox.delete(1.0, "end")  # Clear previous text
+        result_textbox.insert("end", result)  # Insert new result
+        result_textbox.config(state="disabled") 
+        return False
+ 
+
+if __name__ == "__main__":
+    # Create GUI
+    root = Tk()
+    root.title("Tìm kiếm tọa độ thông qua trạm CA")
+    root.geometry("600x500")
+    root.configure(bg="#f0f0f0")
+
+    # Create main frame
+    main_frame = Frame(root, padx=20, pady=20, bg="#f0f0f0")
+    main_frame.pack(expand=True)
+
+    # Title
+    instructions = Label(main_frame, text="Điền thông tin cần tìm kiếm phía dưới", font=("Arial", 12, "bold"), bg="#f0f0f0")
+    instructions.grid(row=0, column=0, columnspan=2, pady=10)
+
+    # Text box and title of administrative unit
+    input_name = Label(main_frame, text="Tên trạm CA:", font=("Arial", 10), bg="#f0f0f0")
+    input_name.grid(row=1, column=0, sticky="w", padx=5, pady=5)
+    administrative_unit = Entry(main_frame, width=40)
+    administrative_unit.grid(row=1, column=1, padx=5, pady=5)
+
+    # Text box and title of "number of boardcast"
+    input_number = Label(main_frame, text="Số điểm phát sóng:", font=("Arial", 10), bg="#f0f0f0")
+    input_number.grid(row=2, column=0, sticky="w", padx=5, pady=5)
+    number_of_boardcast = Entry(main_frame, width=40)
+    number_of_boardcast.grid(row=2, column=1, padx=5, pady=5)
+
+    # Search button
+    button_search = Button(main_frame, text="Tìm kiếm", command=lambda: main(administrative_unit.get(), number_of_boardcast.get()))
+    button_search.grid(row=3, column=0, columnspan=2, pady=15)
+
+    # Create display frame
+    display_frame = Frame(root, padx=10, pady=10, bg="#f0f0f0")
+    
+    # # Label to display function return value
+    result_label = Label(display_frame, text="", font=("Arial", 10, "bold"), fg="blue", bg="#f0f0f0")
+    result_label.grid(row=4, column=0, columnspan=2, pady=10)
+
+    # Configure grid to allow text expansion
+    result_label.grid_rowconfigure(0, weight=1)
+    result_label.grid_columnconfigure(0, weight=1)
+
+    # Scrollbar
+    scrollbar = Scrollbar(result_label)
+    scrollbar.grid(row=0, column=1, sticky="ns")
+
+    # Text widget for displaying results
+    result_textbox = Text(result_label, font=("Arial", 10), fg="blue", bg="#f8f8f8", wrap="word", height=15)
+    result_textbox.grid(row=0, column=0, sticky="nsew")
+    result_textbox.config(state="disabled")  # Prevent user input
+
+    # Link scrollbar to Text widget
+    scrollbar.config(command=result_textbox.yview)
+    result_textbox.config(yscrollcommand=scrollbar.set)
+
+    # Run
+    root.mainloop()
