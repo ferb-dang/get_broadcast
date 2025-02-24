@@ -1,6 +1,9 @@
 import re
+import os
+import difflib
 import pandas as pd
-from tkinter import Tk, Label, Entry, Button, Frame, Scrollbar, Text, Listbox, RIGHT, Y, END
+from unidecode import unidecode
+from tkinter import Tk, Label, Entry, Button, Frame, Scrollbar, Listbox, RIGHT, Y, END
 from math import radians, sin, cos, sqrt, atan2
 
 def lat_lon_convert(lat_lon):
@@ -40,41 +43,85 @@ def get_closest(lat, lon, locations, number_of_location):
     closest_points = sorted(distances.items(), key=lambda item: item[1])[:int(number_of_location)]
     return closest_points
 
-def main(administrative_unit, number_of_boardcast):
-    tram_ca = pd.read_excel("D:\workspaces\get_broadcast\E124-2009 (31-12)2-MSDVHCVN.xls", sheet_name="Xa", usecols="D,G")
-    # Validate input
-    tram_ca_mapped = tram_ca[tram_ca["Tên đơn vị hành chính"].str.contains(administrative_unit,regex=True)]
+def read_file_using_extension(file_dir, file, sheet_name=None, usecols=None):
+    filename, file_extension = os.path.splitext(file)
+    if file_extension in [".xls", ".xlsx", ".xlsm", ".xlsb", ".odf"]:
+        return pd.read_excel(os.path.join(file_dir, file), sheet_name=sheet_name, usecols=usecols)
+    if file_extension in [".csv"]:
+        return pd.read_csv(os.path.join(file_dir, file))
     
-    if len(tram_ca_mapped) > 0:
-        lat_dd, lon_dd = lat_lon_convert(tram_ca_mapped["Toạ độ điểm trung tâm (Vĩ độ, Kinh độ)"].iloc[0])
+def find_city(code_province, province_df):
+    # Cast from string
+    province_df['Mã số'] = pd.to_numeric(province_df['Mã số'], downcast='integer', errors='coerce')
+    province_name = province_df.loc[province_df['Mã số'] == int(code_province)]["Tên đơn vị hành chính"].values[0].strip()
+    
+    for i in ["Thành phố", "Tỉnh", "TP."]:
+        if i in province_name:
+            pattern = r"^(Thành phố |Tỉnh |TP\.)"
+            # Use re.sub to replace the pattern with an empty string
+            province_name = unidecode(re.sub(pattern, "", province_name).strip())
 
-        broadcast_location = pd.read_excel("D:\workspaces\get_broadcast\hanoi.xls", usecols="B, C")
-        list_broadcast_locations = []
-        for index, rows in broadcast_location.iterrows():
-            # Create list for the current row
-            my_list =(rows.Lat.item(), rows.Lon.item())
+    dir_names = os.listdir("toa_do")
+
+    closest_matches = difflib.get_close_matches(province_name, dir_names, n=2, cutoff=0.4)
+    return closest_matches
+
+
+def main(administrative_unit, number_of_boardcast):
+    try:
+        number_of_boardcast = int(number_of_boardcast)
+        tram_ca_file_name = os.listdir("tram_ca")
+        if not tram_ca_file_name or len(tram_ca_file_name) > 1:
+            result_textbox.delete(0, END)
+            result_textbox.insert(END, "Vui lòng kiểm tra dữ liệu trạm CA, hiện đang bị thiếu file hoặc thừa file.")
+            return
+
+        tram_ca = read_file_using_extension("tram_ca", tram_ca_file_name[0], sheet_name="Xa", usecols="A,D,G")
+        province = read_file_using_extension("tram_ca", tram_ca_file_name[0], sheet_name="Tinh", usecols="B,C")
+        # Validate input
+        tram_ca_mapped = tram_ca[tram_ca["Tên đơn vị hành chính"].str.contains(administrative_unit,regex=True)]
+        
+        city_name = find_city(tram_ca_mapped["Mã số Tỉnh"].values[0], province)
+        
+        if len(tram_ca_mapped) > 0:
+            lat_dd, lon_dd = lat_lon_convert(tram_ca_mapped["Toạ độ điểm trung tâm (Vĩ độ, Kinh độ)"].iloc[0])
+
+            # nếu có 2 city trở lên, cần merge dataframe <-----------------------------------------------------------------
+            broadcast_location = read_file_using_extension("toa_do", city_name, usecols="B, C")
+            list_broadcast_locations = []
+            for index, rows in broadcast_location.iterrows():
+                # Create list for the current row
+                my_list =(rows.Lat.item(), rows.Lon.item())
+                
+                # append the list to the final list
+                list_broadcast_locations.append(my_list)
+
+            closest_points = get_closest(lat_dd, lon_dd, list_broadcast_locations, number_of_boardcast)
+
+            # Clear previous output and insert new text
+            result_textbox.config(state="normal")  # Enable editing
+            result_textbox.delete(0, END)  # Clear previous text
             
-            # append the list to the final list
-            list_broadcast_locations.append(my_list)
+            # Format output text
+            result_textbox.insert(END, f"Tọa độ {number_of_boardcast} điểm gần trạm CA nhất là:")
 
-        closest_points = get_closest(lat_dd, lon_dd, list_broadcast_locations, number_of_boardcast)
+            for point, distance in closest_points:
+                result_textbox.insert(END, f"{point} - khoảng cách {distance:.2f} km")
 
-        # Format output text
-        result = f"Tọa độ {number_of_boardcast} điểm gần trạm CA nhất là:\n"
-        result += "\n".join(f"{point} - khoảng cách {distance:.2f} km\n" for point, distance in closest_points)
-
-        # Clear previous output and insert new text
-        result_textbox.config(state="normal")  # Enable editing
-        result_textbox.delete(1.0, "end")  # Clear previous text
-        result_textbox.insert("end", result)  # Insert new result
-        # return result_label.config(text=result)
-
-    else:
-        result = f"Không tìm thấy kết quả theo tên trạm CA: {administrative_unit}\n Vui lòng kiểm tra lại tên trạm đã nhập."
-        # return result_textbox.config(text=result)
-        return result_textbox.insert(END, result)
+        else:
+            result_textbox.config(state="normal")  # Enable editing
+            result_textbox.delete(0, END)
+            result_textbox.insert(END, f"Không tìm thấy kết quả theo tên trạm CA: {administrative_unit}")
+            result_textbox.insert(END, "Vui lòng kiểm tra lại tên trạm đã nhập.")
+    except Exception:
+        result_textbox.delete(0, END)
+        result_textbox.insert(END, "Vui lòng nhập số điểm phát sóng là số nguyên dương.")
 
 def main_frame_gui():
+    root.title("Tìm kiếm tọa độ thông qua trạm CA")
+    root.geometry("600x450")
+    root.configure(bg="#f0f0f0")
+
     # Create main frame
     main_frame = Frame(root, padx=20, pady=20, bg="#f0f0f0")
     main_frame.pack(expand=True)
@@ -99,17 +146,9 @@ def main_frame_gui():
     button_search = Button(main_frame, text="Tìm kiếm", command=lambda: main(administrative_unit.get(), number_of_boardcast.get()))
     button_search.grid(row=3, column=0, columnspan=2, pady=15)
 
-def display_frame_gui():
-    pass
-
-
 if __name__ == "__main__":
     # Create GUI
     root = Tk()
-    root.title("Tìm kiếm tọa độ thông qua trạm CA")
-    root.geometry("600x450")
-    root.configure(bg="#f0f0f0")
-
     main_frame_gui()
 
     # Scrollbar 
@@ -119,8 +158,6 @@ if __name__ == "__main__":
     # Text widget for displaying results
     result_textbox = Listbox(root, font=("Arial", 10), fg="blue", bg="#f8f8f8", height=15, width=75, yscrollcommand=scrollbar.set)
     result_textbox.pack(pady=10)
-    # result_textbox.config(state="disabled")  # Prevent user input
 
     # Run
     root.mainloop()
-    # main("Phúc xá", 5)
