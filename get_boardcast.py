@@ -1,13 +1,8 @@
 import re
 import pandas as pd
-from tkinter import Tk, Label, Entry, Button, Frame, Scrollbar, Text
+from tkinter import Tk, Label, Entry, Button, Frame, Scrollbar, Text, Listbox, RIGHT, Y, END
 from math import radians, sin, cos, sqrt, atan2
 
-#  thông tin tên Trạm CA, số Điểm phát sóng gần nhất muốn tìm 
-"""
-input : mã số tỉnh - mã số huyện - mã số xã - tên đơn vị hành chính - số điểm phát sóng gần nhất ( int : 55)
-output : tọa độ các điểm 
-"""
 def lat_lon_convert(lat_lon):
     def dms_to_dd(degrees, minutes, second_direction):
         match = re.match(r"([0-9]+)([a-z]+)", second_direction, re.I).groups()
@@ -46,14 +41,14 @@ def get_closest(lat, lon, locations, number_of_location):
     return closest_points
 
 def main(administrative_unit, number_of_boardcast):
-    tram_ca = pd.read_excel("C:\Workspace\get_broadcast\E124-2009 (31-12)2-MSDVHCVN.xls", sheet_name="Xa", usecols="D,G")
+    tram_ca = pd.read_excel("D:\workspaces\get_broadcast\E124-2009 (31-12)2-MSDVHCVN.xls", sheet_name="Xa", usecols="D,G")
     # Validate input
     tram_ca_mapped = tram_ca[tram_ca["Tên đơn vị hành chính"].str.contains(administrative_unit,regex=True)]
     
     if len(tram_ca_mapped) > 0:
         lat_dd, lon_dd = lat_lon_convert(tram_ca_mapped["Toạ độ điểm trung tâm (Vĩ độ, Kinh độ)"].iloc[0])
 
-        broadcast_location = pd.read_excel("C:\Workspace\get_broadcast\hanoi.xls", usecols="B, C")
+        broadcast_location = pd.read_excel("D:\workspaces\get_broadcast\hanoi.xls", usecols="B, C")
         list_broadcast_locations = []
         for index, rows in broadcast_location.iterrows():
             # Create list for the current row
@@ -72,25 +67,14 @@ def main(administrative_unit, number_of_boardcast):
         result_textbox.config(state="normal")  # Enable editing
         result_textbox.delete(1.0, "end")  # Clear previous text
         result_textbox.insert("end", result)  # Insert new result
-        result_textbox.config(state="disabled")  # Disable editing
-        return True
+        # return result_label.config(text=result)
 
     else:
         result = f"Không tìm thấy kết quả theo tên trạm CA: {administrative_unit}\n Vui lòng kiểm tra lại tên trạm đã nhập."
-        result_textbox.config(state="normal")  # Enable editing
-        result_textbox.delete(1.0, "end")  # Clear previous text
-        result_textbox.insert("end", result)  # Insert new result
-        result_textbox.config(state="disabled") 
-        return False
- 
+        # return result_textbox.config(text=result)
+        return result_textbox.insert(END, result)
 
-if __name__ == "__main__":
-    # Create GUI
-    root = Tk()
-    root.title("Tìm kiếm tọa độ thông qua trạm CA")
-    root.geometry("600x500")
-    root.configure(bg="#f0f0f0")
-
+def main_frame_gui():
     # Create main frame
     main_frame = Frame(root, padx=20, pady=20, bg="#f0f0f0")
     main_frame.pack(expand=True)
@@ -115,29 +99,28 @@ if __name__ == "__main__":
     button_search = Button(main_frame, text="Tìm kiếm", command=lambda: main(administrative_unit.get(), number_of_boardcast.get()))
     button_search.grid(row=3, column=0, columnspan=2, pady=15)
 
-    # Create display frame
-    display_frame = Frame(root, padx=10, pady=10, bg="#f0f0f0")
-    
-    # # Label to display function return value
-    result_label = Label(display_frame, text="", font=("Arial", 10, "bold"), fg="blue", bg="#f0f0f0")
-    result_label.grid(row=4, column=0, columnspan=2, pady=10)
+def display_frame_gui():
+    pass
 
-    # Configure grid to allow text expansion
-    result_label.grid_rowconfigure(0, weight=1)
-    result_label.grid_columnconfigure(0, weight=1)
 
-    # Scrollbar
-    scrollbar = Scrollbar(result_label)
-    scrollbar.grid(row=0, column=1, sticky="ns")
+if __name__ == "__main__":
+    # Create GUI
+    root = Tk()
+    root.title("Tìm kiếm tọa độ thông qua trạm CA")
+    root.geometry("600x450")
+    root.configure(bg="#f0f0f0")
+
+    main_frame_gui()
+
+    # Scrollbar 
+    scrollbar = Scrollbar(root)
+    scrollbar.pack(side=RIGHT, fill=Y)
 
     # Text widget for displaying results
-    result_textbox = Text(result_label, font=("Arial", 10), fg="blue", bg="#f8f8f8", wrap="word", height=15)
-    result_textbox.grid(row=0, column=0, sticky="nsew")
-    result_textbox.config(state="disabled")  # Prevent user input
-
-    # Link scrollbar to Text widget
-    scrollbar.config(command=result_textbox.yview)
-    result_textbox.config(yscrollcommand=scrollbar.set)
+    result_textbox = Listbox(root, font=("Arial", 10), fg="blue", bg="#f8f8f8", height=15, width=75, yscrollcommand=scrollbar.set)
+    result_textbox.pack(pady=10)
+    # result_textbox.config(state="disabled")  # Prevent user input
 
     # Run
     root.mainloop()
+    # main("Phúc xá", 5)
