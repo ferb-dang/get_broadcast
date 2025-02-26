@@ -62,9 +62,9 @@ def get_file_data(file_dir, file_names, sheet_name=None, usecols=None):
         return data
     
 def find_city(province_name):
-    for i in ["Thành phố", "Tỉnh", "TP."]:
-        if i in province_name:
-            pattern = r"^(Thành phố |Tỉnh |TP\.)"
+    for i in ["thành phố", "tỉnh", "tp."]:
+        if i in province_name.lower():
+            pattern = r"(?i)^(thành phố |tỉnh |tp\.)"
             # Use re.sub to replace the pattern with an empty string
             province_name = re.sub(pattern, "", province_name).strip()
 
@@ -77,7 +77,7 @@ def find_city(province_name):
 def main(city, administrative_unit, number_of_boardcast):
     result_textbox.delete(0, END)
     validate_data(city, str, "Vui lòng nhập Thành phố/Tỉnh cần tìm kiếm")
-    validate_data(administrative_unit, str, "Vui lòng nhập Xã/Phường cần tìm kiếm")
+    validate_data(administrative_unit, str, "Vui lòng nhập Trạm CA cần tìm kiếm")
     validate_data(number_of_boardcast, int, "Vui lòng nhập số điểm phát sóng là số nguyên dương.")
 
     tram_ca_file_name = os.listdir("tram_ca")
