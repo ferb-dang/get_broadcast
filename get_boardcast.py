@@ -71,10 +71,11 @@ def find_city(province_name):
     province_name = unidecode(province_name)
     dir_names = os.listdir("toa_do")
 
-    closest_matches = [file for file in dir_names if re.match(rf'^{re.escape(province_name)}\s*\d*\.xlsx|csv$', file)]
+    closest_matches = [file for file in dir_names if re.match(rf'^{re.escape(province_name)}(?:\s*\d*)\.(xlsx|csv)$', file)]
     return closest_matches
 
 def main(city, administrative_unit, number_of_boardcast):
+    result_textbox.delete(0, END)
     validate_data(city, str, "Vui lòng nhập Thành phố/Tỉnh cần tìm kiếm")
     validate_data(administrative_unit, str, "Vui lòng nhập Xã/Phường cần tìm kiếm")
     validate_data(number_of_boardcast, int, "Vui lòng nhập số điểm phát sóng là số nguyên dương.")
@@ -86,12 +87,13 @@ def main(city, administrative_unit, number_of_boardcast):
         return
 
     tram_ca = get_file_data("tram_ca", tram_ca_file_name, sheet_name="Xa", usecols="A,D,G")
-
+    get_province_code = tram_ca[tram_ca["Tên đơn vị hành chính"].str.contains(city,regex=True)]["Mã số Tỉnh"].iloc[0]
     tram_ca_mapped = tram_ca[tram_ca["Tên đơn vị hành chính"].str.contains(administrative_unit,regex=True)]
     
     city_name = find_city(city)
     
-    if len(tram_ca_mapped) > 0:
+    if len(tram_ca_mapped) > 1:
+        tram_ca_mapped = tram_ca_mapped[tram_ca_mapped["Mã số Tỉnh"] == get_province_code]
         lat_dd, lon_dd = lat_lon_convert(tram_ca_mapped["Toạ độ điểm trung tâm (Vĩ độ, Kinh độ)"].iloc[0])
 
         broadcast_location = get_file_data("toa_do", city_name, sheet_name=0, usecols="B, C")
@@ -126,7 +128,6 @@ def validate_data(input_data, type, message):
         input_data = type(input_data)
     except:
         result_textbox.config(state="normal")
-        result_textbox.delete(0, END)
         result_textbox.insert(END, message)
 
 def frame_gui():
